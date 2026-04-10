@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { MateriaPrima, Movimiento, MateriaPrimaFormData, MovimientoFormData, MovimientoBundleFormData } from '../types';
 import * as materiaPrimaService from '../services/materiaPrima';
 import * as movimientosService from '../services/movimientos';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   materiasPrimas: MateriaPrima[];
@@ -18,12 +19,20 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
+  const { user, loading: authLoading } = useAuth();
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const loadData = async () => {
+    if (!user) {
+      setMateriasPrimas([]);
+      setMovimientos([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -31,10 +40,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         materiaPrimaService.getMateriasPrimas(),
         movimientosService.getMovimientos()
       ]);
-      console.log('Materias Primas loaded:', mpData);
-      console.log('Movimientos loaded:', movData);
       setMateriasPrimas(mpData);
       setMovimientos(movData);
+      setInitialLoadDone(true);
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Error al cargar los datos');
@@ -44,8 +52,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadData();
+    } else if (!authLoading) {
+      setMateriasPrimas([]);
+      setMovimientos([]);
+      setInitialLoadDone(false);
+    }
+  }, [user, authLoading]);
+
+  const isAppDataLoading = (authLoading || (user && !initialLoadDone && loading));
 
   const addMateriaPrima = async (data: MateriaPrimaFormData) => {
     try {
@@ -115,7 +131,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     <AppContext.Provider value={{
       materiasPrimas,
       movimientos,
-      loading,
+      loading: isAppDataLoading,
       error,
       loadData,
       addMateriaPrima,

@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera } from 'lucide-react';
+import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera, Calendar, Printer, FileText } from 'lucide-react';
 import { Movimiento, MovimientoBundleFormData } from '../types';
-import { format } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } from 'date-fns';
 import { CameraCapture } from '../components/CameraCapture';
+import { cn } from '../lib/utils';
 
 export default function Movimientos() {
   const { movimientos, materiasPrimas, addMovimiento } = useAppContext();
@@ -11,6 +12,8 @@ export default function Movimientos() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterProducto, setFilterProducto] = useState<string>('todos');
+  const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   
   const [formData, setFormData] = useState<MovimientoBundleFormData>({
     tipo: 'entrada',
@@ -23,12 +26,19 @@ export default function Movimientos() {
   const [file, setFile] = useState<File | null>(null);
 
   const filteredMovimientos = useMemo(() => {
+    const start = startOfDay(parseISO(startDate));
+    const end = endOfDay(parseISO(endDate));
+
     return movimientos.filter(mov => {
       if (filterTipo !== 'todos' && mov.tipo !== filterTipo) return false;
       if (filterProducto !== 'todos' && mov.materia_prima_id !== filterProducto) return false;
+      
+      const movDate = parseISO(mov.fecha);
+      if (!isWithinInterval(movDate, { start, end })) return false;
+      
       return true;
     });
-  }, [movimientos, filterTipo, filterProducto]);
+  }, [movimientos, filterTipo, filterProducto, startDate, endDate]);
 
   const handleOpenModal = () => {
     setFormData({
@@ -111,21 +121,74 @@ export default function Movimientos() {
 
   const totalPages = Math.ceil(groupedMovimientos.length / itemsPerPage);
 
+  const handlePrint = () => {
+    window.focus();
+    window.print();
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Fecha', 'Tipo', 'Productos'];
+    const csvContent = [
+      headers.join(','),
+      ...groupedMovimientos.map((group) => {
+        const firstMov = group[0];
+        const date = format(new Date(firstMov.fecha), 'yyyy-MM-dd HH:mm');
+        const tipo = firstMov.tipo;
+        const products = group.map(mov => {
+          const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+          return `${mp?.nombre || 'Desconocido'}: ${mov.cantidad} ${mov.unidad_medida}`;
+        }).join(' | ');
+        
+        return [
+          date,
+          tipo,
+          `"${products}"`
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `movimientos_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center print:hidden">
         <h2 className="text-2xl font-bold text-gray-900">Historial de Movimientos</h2>
-        <button
-          onClick={handleOpenModal}
-          className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
-        >
-          <Plus size={20} className="mr-2" />
-          Registrar Movimiento
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            <FileText size={20} className="mr-2" />
+            Exportar CSV
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            <Printer size={20} className="mr-2" />
+            Imprimir
+          </button>
+          <button
+            onClick={handleOpenModal}
+            className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+          >
+            <Plus size={20} className="mr-2" />
+            Registrar Movimiento
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-4">
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-6 items-end print:hidden">
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Tipo</label>
           <select
@@ -157,10 +220,50 @@ export default function Movimientos() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Desde</label>
+          <div className="relative">
+            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
+          <div className="relative">
+            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Report Header (Print Only) */}
+      <div className="hidden print:block text-center mb-8">
+        <h1 className="text-3xl font-bold text-black mb-2">CCM Almacén - Historial de Movimientos</h1>
+        <p className="text-gray-600">Periodo: {format(parseISO(startDate), 'dd/MM/yyyy')} al {format(parseISO(endDate), 'dd/MM/yyyy')}</p>
+        <div className="mt-2 flex justify-center gap-4 text-sm text-gray-500">
+          <span>Tipo: {filterTipo === 'todos' ? 'Todos' : filterTipo === 'entrada' ? 'Entradas' : 'Salidas'}</span>
+          <span>Producto: {filterProducto === 'todos' ? 'Todos' : materiasPrimas.find(m => m.id === filterProducto)?.nombre}</span>
+        </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-primary-subtle overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-primary-subtle overflow-hidden print:border-none print:shadow-none">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="table-header">
@@ -168,7 +271,7 @@ export default function Movimientos() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Fecha</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tipo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Productos</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Evidencia</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider print:hidden">Evidencia</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -176,7 +279,7 @@ export default function Movimientos() {
                 const firstMov = group[0];
                 const isEntrada = firstMov.tipo === 'entrada';
                 return (
-                  <tr key={firstMov.bundle_id} onClick={() => setSelectedBundle(group)} className="hover:bg-gray-50 cursor-pointer">
+                  <tr key={firstMov.bundle_id} onClick={() => setSelectedBundle(group)} className="hover:bg-gray-50 cursor-pointer print:break-inside-avoid">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {format(new Date(firstMov.fecha), 'dd/MM/yyyy HH:mm')}
                     </td>
@@ -194,7 +297,7 @@ export default function Movimientos() {
                         return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
                       })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 print:hidden">
                       {firstMov.imagen_url ? (
                         <a href={firstMov.imagen_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900 flex items-center">
                           <ImageIcon size={16} className="mr-1" /> Ver
@@ -217,7 +320,7 @@ export default function Movimientos() {
           </table>
         </div>
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between print:hidden">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}

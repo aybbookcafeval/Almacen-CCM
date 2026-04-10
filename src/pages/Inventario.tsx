@@ -1,12 +1,23 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Filter, FileText, Printer, Calendar } from 'lucide-react';
 import { MateriaPrimaFormData } from '../types';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } from 'date-fns';
+import { cn } from '../lib/utils';
 
 export default function Inventario() {
-  const { materiasPrimas, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
+  const { materiasPrimas, movimientos, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReportMode, setIsReportMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Advanced Filters
+  const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterUnidad, setFilterUnidad] = useState<string>('todos');
+
   const [formData, setFormData] = useState<MateriaPrimaFormData>({
     nombre: '',
     unidad_medida: 'kg',
@@ -64,41 +75,322 @@ export default function Inventario() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const paginatedMateriasPrimas = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return materiasPrimas.slice(startIndex, startIndex + itemsPerPage);
-  }, [materiasPrimas, currentPage]);
+  const inventoryReport = useMemo(() => {
+    const start = startOfDay(parseISO(startDate));
+    const end = endOfDay(parseISO(endDate));
 
-  const totalPages = Math.ceil(materiasPrimas.length / itemsPerPage);
+    return materiasPrimas.map(mp => {
+      // Movements in range
+      const movementsInRange = movimientos.filter(mov => 
+        mov.materia_prima_id === mp.id && 
+        isWithinInterval(parseISO(mov.fecha), { start, end })
+      );
+
+      const entradasInRange = movementsInRange
+        .filter(m => m.tipo === 'entrada')
+        .reduce((sum, m) => sum + m.cantidad, 0);
+      
+      const salidasInRange = movementsInRange
+        .filter(m => m.tipo === 'salida')
+        .reduce((sum, m) => sum + m.cantidad, 0);
+
+      // Movements AFTER end date (to calculate stock at end date)
+      const movementsAfterEnd = movimientos.filter(mov => 
+        mov.materia_prima_id === mp.id && 
+        parseISO(mov.fecha) > end
+      );
+
+      const entradasAfterEnd = movementsAfterEnd
+        .filter(m => m.tipo === 'entrada')
+        .reduce((sum, m) => sum + m.cantidad, 0);
+      
+      const salidasAfterEnd = movementsAfterEnd
+        .filter(m => m.tipo === 'salida')
+        .reduce((sum, m) => sum + m.cantidad, 0);
+
+      // Stock at End Date = CurrentStock - (Entradas after end) + (Salidas after end)
+      const stockAtEnd = mp.stock - entradasAfterEnd + salidasAfterEnd;
+      
+      // Stock at Start Date = StockAtEnd - (Entradas in range) + (Salidas in range)
+      const stockAtStart = stockAtEnd - entradasInRange + salidasInRange;
+
+      return {
+        ...mp,
+        stockAtStart,
+        entradasInRange,
+        salidasInRange,
+        stockAtEnd
+      };
+    }).filter(mp => {
+      const matchesSearch = mp.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesUnidad = filterUnidad === 'todos' || mp.unidad_medida === filterUnidad;
+      
+      let matchesStatus = true;
+      if (filterStatus !== 'todos') {
+        const isLow = mp.stockAtEnd < mp.min_stock;
+        const isHigh = mp.stockAtEnd > mp.max_stock;
+        const status = isLow ? 'bajo' : isHigh ? 'alto' : 'optimo';
+        matchesStatus = status === filterStatus;
+      }
+
+      return matchesSearch && matchesUnidad && matchesStatus;
+    });
+  }, [materiasPrimas, movimientos, startDate, endDate, searchTerm, filterStatus, filterUnidad]);
+
+  const filteredMateriasPrimas = useMemo(() => {
+    return materiasPrimas.filter(mp => {
+      const matchesSearch = mp.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesUnidad = filterUnidad === 'todos' || mp.unidad_medida === filterUnidad;
+      
+      let matchesStatus = true;
+      if (filterStatus !== 'todos') {
+        const isLow = mp.stock < mp.min_stock;
+        const isHigh = mp.stock > mp.max_stock;
+        const status = isLow ? 'bajo' : isHigh ? 'alto' : 'optimo';
+        matchesStatus = status === filterStatus;
+      }
+
+      return matchesSearch && matchesUnidad && matchesStatus;
+    });
+  }, [materiasPrimas, searchTerm, filterStatus, filterUnidad]);
+
+  const paginatedMateriasPrimas = useMemo(() => {
+    const data = isReportMode ? inventoryReport : filteredMateriasPrimas;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return data.slice(startIndex, startIndex + itemsPerPage);
+  }, [isReportMode, inventoryReport, filteredMateriasPrimas, currentPage]);
+
+  const totalPages = Math.ceil((isReportMode ? inventoryReport.length : filteredMateriasPrimas.length) / itemsPerPage);
+
+  const handlePrint = () => {
+    window.focus();
+    window.print();
+  };
+
+  const handleExportCSV = () => {
+    const data = isReportMode ? inventoryReport : filteredMateriasPrimas;
+    const headers = isReportMode 
+      ? ['Producto', 'Stock Inicial', 'Entradas', 'Salidas', 'Stock Final', 'Unidad']
+      : ['Nombre', 'Stock Actual', 'Unidad', 'Min Stock', 'Max Stock'];
+    
+    const csvContent = [
+      headers.join(','),
+      ...data.map((mp: any) => {
+        if (isReportMode) {
+          return [
+            `"${mp.nombre}"`,
+            mp.stockAtStart,
+            mp.entradasInRange,
+            mp.salidasInRange,
+            mp.stockAtEnd,
+            mp.unidad_medida
+          ].join(',');
+        }
+        return [
+          `"${mp.nombre}"`,
+          mp.stock,
+          mp.unidad_medida,
+          mp.min_stock,
+          mp.max_stock
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inventario_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <h2 className="text-2xl font-bold text-gray-900">Inventario de Materia Prima</h2>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
-        >
-          <Plus size={20} className="mr-2" />
-          Nuevo Producto
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              setIsReportMode(!isReportMode);
+              setCurrentPage(1);
+            }}
+            className={cn(
+              "flex items-center px-4 py-2 rounded-md transition-colors border",
+              isReportMode 
+                ? "bg-black text-white border-black" 
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            )}
+          >
+            <FileText size={20} className="mr-2" />
+            {isReportMode ? 'Vista Normal' : 'Modo Reporte'}
+          </button>
+          {!isReportMode && (
+            <button
+              onClick={() => handleOpenModal()}
+              className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+            >
+              <Plus size={20} className="mr-2" />
+              Nuevo Producto
+            </button>
+          )}
+          {isReportMode && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <FileText size={20} className="mr-2" />
+                Exportar CSV
+              </button>
+              <button
+                onClick={handlePrint}
+                className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+              >
+                <Printer size={20} className="mr-2" />
+                Imprimir Reporte
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-primary-subtle overflow-hidden">
+      {/* Advanced Filters */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-6 items-end print:hidden">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Buscar Producto</label>
+          <input
+            type="text"
+            placeholder="Nombre del producto..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Estado</label>
+          <select
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="todos">Todos los estados</option>
+            <option value="bajo">Bajo Stock</option>
+            <option value="optimo">Óptimo</option>
+            <option value="alto">Sobre-stock</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Unidad</label>
+          <select
+            value={filterUnidad}
+            onChange={(e) => {
+              setFilterUnidad(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="todos">Todas las unidades</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="L">L</option>
+            <option value="ml">ml</option>
+            <option value="unidades">unidades</option>
+          </select>
+        </div>
+        
+        {isReportMode && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Desde</label>
+              <div className="relative">
+                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
+              <div className="relative">
+                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Report Header (Print Only) */}
+      <div className="hidden print:block text-center mb-8">
+        <h1 className="text-3xl font-bold text-black mb-2">CCM Almacén - Reporte de Inventario</h1>
+        <p className="text-gray-600">Periodo: {format(parseISO(startDate), 'dd/MM/yyyy')} al {format(parseISO(endDate), 'dd/MM/yyyy')}</p>
+        <p className="text-xs text-gray-400 mt-2">Generado el: {format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-primary-subtle overflow-hidden print:border-none print:shadow-none">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="table-header">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Stock Actual</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Unidad</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Mín / Máx</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Acciones</th>
-              </tr>
+            <thead className={isReportMode ? "bg-black text-white" : "table-header"}>
+              {isReportMode ? (
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Producto</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Stock Inicial</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-green-100">Entradas (+)</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-red-100">Salidas (-)</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Stock Final</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Unidad</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nombre</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Stock Actual</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Unidad</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Mín / Máx</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Estado</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider print:hidden">Acciones</th>
+                </tr>
+              )}
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedMateriasPrimas.map((mp) => {
+              {paginatedMateriasPrimas.map((mp: any) => {
+                if (isReportMode) {
+                  return (
+                    <tr key={mp.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{mp.nombre}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600 font-mono">{mp.stockAtStart}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-green-600 font-mono font-bold">+{mp.entradasInRange}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-red-600 font-mono font-bold">-{mp.salidasInRange}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900 font-mono font-bold">{mp.stockAtEnd}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{mp.unidad_medida}</td>
+                    </tr>
+                  );
+                }
+                
                 const isLow = mp.stock < mp.min_stock;
                 const isHigh = mp.stock > mp.max_stock;
                 return (
@@ -116,7 +408,7 @@ export default function Inventario() {
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Óptimo</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium print:hidden">
                       <button onClick={() => handleOpenModal(mp)} className="text-blue-600 hover:text-blue-900 mr-4">
                         <Edit2 size={18} />
                       </button>
@@ -130,7 +422,7 @@ export default function Inventario() {
               {paginatedMateriasPrimas.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
-                    No hay productos registrados.
+                    No hay productos que coincidan con los criterios.
                   </td>
                 </tr>
               )}
@@ -138,7 +430,7 @@ export default function Inventario() {
           </table>
         </div>
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between print:hidden">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}

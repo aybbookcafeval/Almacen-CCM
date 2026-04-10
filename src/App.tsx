@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -12,9 +13,20 @@ import Inventario from './pages/Inventario';
 import Movimientos from './pages/Movimientos';
 import LoginPage from './pages/LoginPage';
 
+import { useAppContext } from './context/AppContext';
+
+const LoadingScreen = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+    <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin mb-4"></div>
+    <p className="text-gray-600 font-medium">Cargando CCM Almacén...</p>
+  </div>
+);
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  if (loading) return <div>Cargando...</div>;
+  const { user, loading: authLoading } = useAuth();
+  const { loading: appLoading } = useAppContext();
+  
+  if (authLoading || appLoading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" />;
   return <>{children}</>;
 };
