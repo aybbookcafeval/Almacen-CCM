@@ -31,9 +31,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         materiaPrimaService.getMateriasPrimas(),
         movimientosService.getMovimientos()
       ]);
+      console.log('Materias Primas loaded:', mpData);
+      console.log('Movimientos loaded:', movData);
       setMateriasPrimas(mpData);
       setMovimientos(movData);
     } catch (err: any) {
+      console.error('Error loading data:', err);
       setError(err.message || 'Error al cargar los datos');
     } finally {
       setLoading(false);

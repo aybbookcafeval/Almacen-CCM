@@ -13,7 +13,10 @@ export const getMateriasPrimas = async (): Promise<MateriaPrima[]> => {
     return [...mockMateriasPrimas];
   }
   const { data, error } = await supabase.from('materia_prima').select('*').order('nombre');
-  if (error) throw error;
+  if (error) {
+    console.error('Supabase error in getMateriasPrimas:', error);
+    throw error;
+  }
   return data;
 };
 

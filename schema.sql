@@ -57,15 +57,26 @@ create or replace trigger on_auth_user_created
 
 -- Policies for profiles
 create policy "Users can view their own profile" on profiles for select using (auth.uid() = id);
-create policy "Admins can view all profiles" on profiles for select using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
-);
+-- Function to check if user is admin (avoids recursion)
+create or replace function public.is_admin()
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Drop old policies
+drop policy if exists "Admins can view all profiles" on profiles;
+drop policy if exists "Admins can manage materia_prima" on materia_prima;
+
+-- Policies for profiles
+create policy "Admins can view all profiles" on profiles for select using (public.is_admin());
 
 -- Policies for materia_prima
-create policy "Authenticated users can read materia_prima" on materia_prima for select using (auth.role() = 'authenticated');
-create policy "Admins can manage materia_prima" on materia_prima for all using (
-  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
-);
+create policy "Admins can manage materia_prima" on materia_prima for all using (public.is_admin());
 
 -- Policies for movimientos
 create policy "Authenticated users can read movimientos" on movimientos for select using (auth.role() = 'authenticated');
