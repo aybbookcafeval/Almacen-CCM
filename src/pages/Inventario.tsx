@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 export default function Inventario() {
   const { materiasPrimas, movimientos, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReportMode, setIsReportMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -49,6 +50,7 @@ export default function Inventario() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsSubmitting(true);
       if (editingId) {
         await editMateriaPrima(editingId, formData);
       } else {
@@ -58,6 +60,8 @@ export default function Inventario() {
     } catch (error) {
       console.error(error);
       alert('Error al guardar');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -514,16 +518,25 @@ export default function Inventario() {
               <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-black border border-transparent rounded-md hover:bg-gray-800"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-black border border-transparent rounded-md hover:bg-gray-800 disabled:opacity-50 flex items-center"
                 >
-                  Guardar
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar'
+                  )}
                 </button>
               </div>
             </form>

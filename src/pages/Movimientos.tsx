@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 export default function Movimientos() {
   const { movimientos, materiasPrimas, addMovimiento } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterProducto, setFilterProducto] = useState<string>('todos');
@@ -90,11 +91,14 @@ export default function Movimientos() {
     }
 
     try {
+      setIsSubmitting(true);
       await addMovimiento(formData, file || undefined);
       setIsModalOpen(false);
     } catch (error: any) {
       console.error(error);
       alert(error.message || 'Error al registrar movimiento');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -499,17 +503,26 @@ export default function Movimientos() {
             <div className="p-6 border-t flex justify-end space-x-3">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
+                disabled={isSubmitting}
                 onClick={handleSubmit}
-                className="px-4 py-2 text-sm font-medium text-white bg-black border border-transparent rounded-md hover:bg-gray-800"
+                className="px-4 py-2 text-sm font-medium text-white bg-black border border-transparent rounded-md hover:bg-gray-800 disabled:opacity-50 flex items-center"
               >
-                Registrar
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Procesando...
+                  </>
+                ) : (
+                  'Registrar'
+                )}
               </button>
             </div>
           </div>
