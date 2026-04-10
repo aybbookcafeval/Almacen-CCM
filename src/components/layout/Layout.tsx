@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Package, ArrowRightLeft, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Package, ArrowRightLeft, Menu, X, LogOut } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 export const Layout = () => {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { signOut } = useAuth();
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -62,16 +64,25 @@ export const Layout = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-8">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
+          <div className="flex items-center">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden mr-4 text-gray-500 hover:text-gray-900"
+            >
+              <Menu size={24} />
+            </button>
+            <h2 className="text-lg font-medium text-gray-900">
+              {navItems.find(item => item.path === location.pathname)?.name || 'CCM Almacén'}
+            </h2>
+          </div>
           <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="lg:hidden mr-4 text-gray-500 hover:text-gray-900"
+            onClick={signOut}
+            className="flex items-center text-sm text-gray-600 hover:text-gray-900"
           >
-            <Menu size={24} />
+            <LogOut size={18} className="mr-2" />
+            Salir
           </button>
-          <h2 className="text-lg font-medium text-gray-900">
-            {navItems.find(item => item.path === location.pathname)?.name || 'CCM Almacén'}
-          </h2>
         </header>
         <div className="flex-1 overflow-auto p-4 lg:p-8">
           <Outlet />
