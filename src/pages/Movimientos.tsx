@@ -1,0 +1,427 @@
+import React, { useState, useMemo } from 'react';
+import { useAppContext } from '../context/AppContext';
+import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera } from 'lucide-react';
+import { Movimiento, MovimientoBundleFormData } from '../types';
+import { format } from 'date-fns';
+import { CameraCapture } from '../components/CameraCapture';
+
+export default function Movimientos() {
+  const { movimientos, materiasPrimas, addMovimiento } = useAppContext();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [filterTipo, setFilterTipo] = useState<string>('todos');
+  const [filterProducto, setFilterProducto] = useState<string>('todos');
+  
+  const [formData, setFormData] = useState<MovimientoBundleFormData>({
+    tipo: 'entrada',
+    items: [{
+      materia_prima_id: '',
+      cantidad: 0,
+      unidad_medida: 'kg',
+    }]
+  });
+  const [file, setFile] = useState<File | null>(null);
+
+  const filteredMovimientos = useMemo(() => {
+    return movimientos.filter(mov => {
+      if (filterTipo !== 'todos' && mov.tipo !== filterTipo) return false;
+      if (filterProducto !== 'todos' && mov.materia_prima_id !== filterProducto) return false;
+      return true;
+    });
+  }, [movimientos, filterTipo, filterProducto]);
+
+  const handleOpenModal = () => {
+    setFormData({
+      tipo: 'entrada',
+      items: [{
+        materia_prima_id: materiasPrimas.length > 0 ? materiasPrimas[0].id : '',
+        cantidad: 0,
+        unidad_medida: materiasPrimas.length > 0 ? materiasPrimas[0].unidad_medida : 'kg',
+      }]
+    });
+    setFile(null);
+    setIsModalOpen(true);
+  };
+
+  const handleMateriaPrimaChange = (index: number, id: string) => {
+    const mp = materiasPrimas.find(m => m.id === id);
+    const newItems = [...formData.items];
+    newItems[index] = {
+      ...newItems[index],
+      materia_prima_id: id,
+      unidad_medida: mp ? mp.unidad_medida : newItems[index].unidad_medida,
+    };
+    setFormData({ ...formData, items: newItems });
+  };
+
+  const addRow = () => {
+    setFormData({
+      ...formData,
+      items: [...formData.items, {
+        materia_prima_id: materiasPrimas.length > 0 ? materiasPrimas[0].id : '',
+        cantidad: 0,
+        unidad_medida: materiasPrimas.length > 0 ? materiasPrimas[0].unidad_medida : 'kg',
+      }]
+    });
+  };
+
+  const removeRow = (index: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.items.some(d => !d.materia_prima_id || d.cantidad <= 0)) {
+      alert('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
+      return;
+    }
+
+    try {
+      await addMovimiento(formData, file || undefined);
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || 'Error al registrar movimiento');
+    }
+  };
+
+  const [selectedBundle, setSelectedBundle] = useState<Movimiento[] | null>(null);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  const groupedMovimientos = useMemo(() => {
+    const groups: { [key: string]: Movimiento[] } = {};
+    filteredMovimientos.forEach(mov => {
+      if (!groups[mov.bundle_id]) {
+        groups[mov.bundle_id] = [];
+      }
+      groups[mov.bundle_id].push(mov);
+    });
+    return Object.values(groups).sort((a, b) => new Date(b[0].fecha).getTime() - new Date(a[0].fecha).getTime());
+  }, [filteredMovimientos]);
+
+  const paginatedMovimientos = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return groupedMovimientos.slice(startIndex, startIndex + itemsPerPage);
+  }, [groupedMovimientos, currentPage]);
+
+  const totalPages = Math.ceil(groupedMovimientos.length / itemsPerPage);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Historial de Movimientos</h2>
+        <button
+          onClick={handleOpenModal}
+          className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+        >
+          <Plus size={20} className="mr-2" />
+          Registrar Movimiento
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Tipo</label>
+          <select
+            value={filterTipo}
+            onChange={(e) => {
+              setFilterTipo(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-40 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="todos">Todos</option>
+            <option value="entrada">Entradas</option>
+            <option value="salida">Salidas</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Producto</label>
+          <select
+            value={filterProducto}
+            onChange={(e) => {
+              setFilterProducto(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-64 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="todos">Todos los productos</option>
+            {materiasPrimas.map(mp => (
+              <option key={mp.id} value={mp.id}>{mp.nombre}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-primary-subtle overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="table-header">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tipo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Productos</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Evidencia</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedMovimientos.map((group) => {
+                const firstMov = group[0];
+                const isEntrada = firstMov.tipo === 'entrada';
+                return (
+                  <tr key={firstMov.bundle_id} onClick={() => setSelectedBundle(group)} className="hover:bg-gray-50 cursor-pointer">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {format(new Date(firstMov.fecha), 'dd/MM/yyyy HH:mm')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        isEntrada ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {isEntrada ? <ArrowDownToLine size={14} className="mr-1" /> : <ArrowUpFromLine size={14} className="mr-1" />}
+                        {isEntrada ? 'Entrada' : 'Salida'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {group.map(mov => {
+                        const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                        return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                      })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {firstMov.imagen_url ? (
+                        <a href={firstMov.imagen_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900 flex items-center">
+                          <ImageIcon size={16} className="mr-1" /> Ver
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {paginatedMovimientos.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No hay movimientos que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-gray-700">Página {currentPage} de {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bundle Details Modal */}
+      {selectedBundle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Detalle del Movimiento</h3>
+              <button onClick={() => setSelectedBundle(null)} className="text-gray-400 hover:text-gray-500">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">Fecha: {format(new Date(selectedBundle[0].fecha), 'dd/MM/yyyy HH:mm')}</p>
+              <p className="text-sm text-gray-600">Tipo: {selectedBundle[0].tipo === 'entrada' ? 'Entrada' : 'Salida'}</p>
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-gray-900 mb-2">Productos:</h4>
+                {selectedBundle.map(mov => {
+                  const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                  return <div key={mov.id} className="text-sm text-gray-700">{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                })}
+              </div>
+              {selectedBundle[0].imagen_url && (
+                <div className="border-t pt-4">
+                  <h4 className="font-medium text-gray-900 mb-2">Evidencia:</h4>
+                  <img src={selectedBundle[0].imagen_url} alt="Evidencia" className="w-full rounded-lg" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-medium text-gray-900">Registrar Movimiento</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Tipo de Movimiento</label>
+                  <div className="mt-2 flex space-x-4">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        className="form-radio text-black"
+                        name="tipo"
+                        value="entrada"
+                        checked={formData.tipo === 'entrada'}
+                        onChange={() => setFormData({ ...formData, tipo: 'entrada' })}
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Entrada</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        className="form-radio text-black"
+                        name="tipo"
+                        value="salida"
+                        checked={formData.tipo === 'salida'}
+                        onChange={() => setFormData({ ...formData, tipo: 'salida' })}
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Salida</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-sm font-medium text-gray-700">Productos</label>
+                  {formData.items.map((item, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg space-y-3 relative border border-gray-100">
+                      {formData.items.length > 1 && (
+                        <button type="button" onClick={() => removeRow(index)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500">
+                          <X size={16} />
+                        </button>
+                      )}
+                      
+                      <div>
+                        <select
+                          required
+                          value={item.materia_prima_id}
+                          onChange={(e) => handleMateriaPrimaChange(index, e.target.value)}
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
+                        >
+                          <option value="" disabled>Seleccione un producto</option>
+                          {materiasPrimas.map(mp => (
+                            <option key={mp.id} value={mp.id}>{mp.nombre} (Stock: {mp.stock} {mp.unidad_medida})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <input
+                            type="number"
+                            required
+                            min="0.01"
+                            step="0.01"
+                            placeholder="Cantidad"
+                            value={item.cantidad || ''}
+                            onChange={(e) => {
+                              const newItems = [...formData.items];
+                              newItems[index].cantidad = Number(e.target.value);
+                              setFormData({ ...formData, items: newItems });
+                            }}
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            disabled
+                            value={item.unidad_medida}
+                            className="block w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-gray-500 shadow-sm sm:text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addRow}
+                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-md text-sm text-gray-500 hover:border-black hover:text-black transition-colors"
+                  >
+                    + Agregar Producto
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Evidencia</label>
+                  <div className="mt-1 flex items-center space-x-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-black hover:file:bg-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCameraOpen(true)}
+                      className="p-2 bg-gray-100 rounded-md hover:bg-gray-200 text-black"
+                    >
+                      <Camera size={20} />
+                    </button>
+                  </div>
+                  {file && <p className="text-xs text-gray-500 mt-1">Archivo seleccionado: {file.name}</p>}
+                </div>
+              </form>
+            </div>
+
+            <div className="p-6 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                className="px-4 py-2 text-sm font-medium text-white bg-black border border-transparent rounded-md hover:bg-gray-800"
+              >
+                Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {isCameraOpen && (
+        <CameraCapture
+          onCapture={(capturedFile) => {
+            setFile(capturedFile);
+            setIsCameraOpen(false);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+        />
+      )}
+    </div>
+  );
+}

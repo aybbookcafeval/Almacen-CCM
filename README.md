@@ -1,11 +1,30 @@
-<div align="center">
+# CCM Almacén
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Sistema de gestión de inventario de materia prima para almacenes de alimentos.
 
-  <h1>Built with AI Studio</h2>
+## 🎯 Objetivo
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+CCM Almacén es una aplicación web diseñada para controlar el stock en tiempo real, registrar entradas y salidas de materia prima, y mantener una trazabilidad completa de los movimientos.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## 🚀 Características Principales
 
-</div>
+- **Control de Stock**: Gestión de entradas y salidas con actualización automática.
+- **Dashboard**: Visualización rápida del estado del inventario (bajo stock, sobrestock, total).
+- **Trazabilidad**: Historial completo de movimientos.
+- **Evidencias**: Capacidad de adjuntar imágenes a los movimientos.
+- **Responsivo**: Interfaz optimizada para escritorio y dispositivos móviles.
+- **Reportes**: Visualización y gestión de datos de inventario.
+
+## 🛠️ Tecnologías
+
+- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui, Lucide React.
+- **Backend**: Supabase (PostgreSQL, Auth, Storage).
+
+## ⚙️ Configuración
+
+Para ejecutar este proyecto localmente:
+
+1. Clona el repositorio.
+2. Instala las dependencias: `npm install`
+3. Configura las variables de entorno necesarias (Supabase URL y Key).
+4. Ejecuta el servidor de desarrollo: `npm run dev`

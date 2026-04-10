@@ -1,0 +1,5 @@
+{
+  "name": "CCM Almacén",
+  "description": "Sistema de gestión de inventario de materia prima para almacén de alimentos.",
+  "requestFramePermissions": ["camera"]
+}
