@@ -18,6 +18,7 @@ export type Movimiento = {
   unidad_medida: string;
   fecha: string;
   imagen_url?: string;
+  comentario?: string;
   created_at: string;
 };
 
@@ -34,4 +35,5 @@ export type MovimientoBundleFormData = {
   tipo: 'entrada' | 'salida';
   items: MovimientoItem[];
   imagen_url?: string;
+  comentario?: string;
 };

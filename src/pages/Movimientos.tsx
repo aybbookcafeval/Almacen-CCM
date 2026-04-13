@@ -22,7 +22,8 @@ export default function Movimientos() {
       materia_prima_id: '',
       cantidad: 0,
       unidad_medida: 'kg',
-    }]
+    }],
+    comentario: ''
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -48,7 +49,8 @@ export default function Movimientos() {
         materia_prima_id: materiasPrimas.length > 0 ? materiasPrimas[0].id : '',
         cantidad: 0,
         unidad_medida: materiasPrimas.length > 0 ? materiasPrimas[0].unidad_medida : 'kg',
-      }]
+      }],
+      comentario: ''
     });
     setFile(null);
     setIsModalOpen(true);
@@ -357,6 +359,9 @@ export default function Movimientos() {
             <div className="space-y-4">
               <p className="text-sm text-gray-600">Fecha: {format(new Date(selectedBundle[0].fecha), 'dd/MM/yyyy HH:mm')}</p>
               <p className="text-sm text-gray-600">Tipo: {selectedBundle[0].tipo === 'entrada' ? 'Entrada' : 'Salida'}</p>
+              {selectedBundle[0].comentario && (
+                <p className="text-sm text-gray-600"><span className="font-medium">Comentario:</span> {selectedBundle[0].comentario}</p>
+              )}
               <div className="border-t pt-4">
                 <h4 className="font-medium text-gray-900 mb-2">Productos:</h4>
                 {selectedBundle.map(mov => {
@@ -496,6 +501,17 @@ export default function Movimientos() {
                     </button>
                   </div>
                   {file && <p className="text-xs text-gray-500 mt-1">Archivo seleccionado: {file.name}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Comentario</label>
+                  <textarea
+                    value={formData.comentario}
+                    onChange={(e) => setFormData({ ...formData, comentario: e.target.value })}
+                    placeholder="Opcional: Agregue una nota o comentario..."
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
+                    rows={3}
+                  />
                 </div>
               </form>
             </div>

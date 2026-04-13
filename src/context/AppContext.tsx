@@ -105,7 +105,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         tipo: data.tipo,
         cantidad: item.cantidad,
         unidad_medida: item.unidad_medida,
-        imagen_url
+        imagen_url,
+        comentario: data.comentario
       })));
       
       // Update local stock

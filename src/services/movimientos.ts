@@ -3,8 +3,8 @@ import { Movimiento, MovimientoFormData } from '../types';
 
 // Mock data for preview
 let mockMovimientos: Movimiento[] = [
-  { id: '101', bundle_id: 'b1', materia_prima_id: '1', tipo: 'entrada', cantidad: 100, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: '102', bundle_id: 'b2', materia_prima_id: '2', tipo: 'salida', cantidad: 50, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: '101', bundle_id: 'b1', materia_prima_id: '1', tipo: 'entrada', cantidad: 100, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Carga inicial' },
+  { id: '102', bundle_id: 'b2', materia_prima_id: '2', tipo: 'salida', cantidad: 50, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Pedido cliente A' },
 ];
 
 export const getMovimientos = async (): Promise<Movimiento[]> => {
