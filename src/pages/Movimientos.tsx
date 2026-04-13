@@ -166,36 +166,36 @@ export default function Movimientos() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center print:hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <h2 className="text-2xl font-bold text-gray-900">Historial de Movimientos</h2>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
           <button
             onClick={handleExportCSV}
-            className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
           >
-            <FileText size={20} className="mr-2" />
-            Exportar CSV
+            <FileText size={18} className="mr-2" />
+            <span className="hidden xs:inline">Exportar</span> CSV
           </button>
           <button
             onClick={handlePrint}
-            className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm"
           >
-            <Printer size={20} className="mr-2" />
+            <Printer size={18} className="mr-2" />
             Imprimir
           </button>
           <button
             onClick={handleOpenModal}
-            className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+            className="col-span-2 sm:col-auto flex items-center justify-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm"
           >
-            <Plus size={20} className="mr-2" />
+            <Plus size={18} className="mr-2" />
             Registrar Movimiento
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-6 items-end print:hidden">
-        <div>
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-4 items-end print:hidden">
+        <div className="w-full lg:w-40">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Tipo</label>
           <select
             value={filterTipo}
@@ -203,14 +203,14 @@ export default function Movimientos() {
               setFilterTipo(e.target.value);
               setCurrentPage(1);
             }}
-            className="block w-40 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
           >
             <option value="todos">Todos</option>
             <option value="entrada">Entradas</option>
             <option value="salida">Salidas</option>
           </select>
         </div>
-        <div>
+        <div className="w-full lg:w-64">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Producto</label>
           <select
             value={filterProducto}
@@ -218,7 +218,7 @@ export default function Movimientos() {
               setFilterProducto(e.target.value);
               setCurrentPage(1);
             }}
-            className="block w-64 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
           >
             <option value="todos">Todos los productos</option>
             {materiasPrimas.map(mp => (
@@ -226,7 +226,7 @@ export default function Movimientos() {
             ))}
           </select>
         </div>
-        <div>
+        <div className="w-full lg:w-auto lg:flex-1">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Desde</label>
           <div className="relative">
             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -241,7 +241,7 @@ export default function Movimientos() {
             />
           </div>
         </div>
-        <div>
+        <div className="w-full lg:w-auto lg:flex-1">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
           <div className="relative">
             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

@@ -1,3 +1,11 @@
+export type Profile = {
+  id: string;
+  email: string;
+  role: 'admin' | 'user';
+  created_at: string;
+  updated_at: string;
+};
+
 export type MateriaPrima = {
   id: string;
   nombre: string;
