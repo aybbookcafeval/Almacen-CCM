@@ -17,7 +17,15 @@ export const getMateriasPrimas = async (): Promise<MateriaPrima[]> => {
     console.error('Supabase error in getMateriasPrimas:', error);
     throw error;
   }
-  return data;
+  
+  // Filter duplicates by name
+  const seenNames = new Set();
+  return (data || []).filter(mp => {
+    const normalizedName = mp.nombre.trim().toLowerCase();
+    if (seenNames.has(normalizedName)) return false;
+    seenNames.add(normalizedName);
+    return true;
+  });
 };
 
 export const createMateriaPrima = async (data: MateriaPrimaFormData): Promise<MateriaPrima> => {

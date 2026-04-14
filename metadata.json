@@ -1,5 +1,5 @@
 {
-  "name": "Almacen CCM",
+  "name": "Gestión de Almacenes Mgta",
   "description": "Sistema de gestión de inventario de materia prima para almacén de alimentos.",
   "requestFramePermissions": [
     "camera"

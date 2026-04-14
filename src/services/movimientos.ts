@@ -1,10 +1,10 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Movimiento, MovimientoFormData } from '../types';
+import { Movimiento, MovimientoFormData, TransferenciaFormData } from '../types';
 
 // Mock data for preview
 let mockMovimientos: Movimiento[] = [
-  { id: '101', bundle_id: 'b1', materia_prima_id: '1', tipo: 'entrada', cantidad: 100, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Carga inicial' },
-  { id: '102', bundle_id: 'b2', materia_prima_id: '2', tipo: 'salida', cantidad: 50, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Pedido cliente A' },
+  { id: '101', bundle_id: 'b1', materia_prima_id: '1', almacen_id: 'default', tipo: 'entrada', cantidad: 100, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Carga inicial' },
+  { id: '102', bundle_id: 'b2', materia_prima_id: '2', almacen_id: 'default', tipo: 'salida', cantidad: 50, unidad_medida: 'kg', fecha: new Date().toISOString(), created_at: new Date().toISOString(), comentario: 'Pedido cliente A' },
 ];
 
 export const getMovimientos = async (): Promise<Movimiento[]> => {
@@ -29,28 +29,79 @@ export const createMovimiento = async (data: MovimientoFormData): Promise<Movimi
     return newMov;
   }
   
-  // In a real app, this should be a database function (RPC) or trigger to ensure atomicity
-  // For this implementation, we do it in two steps
-  
-  // 1. Get current stock
-  const { data: mp, error: mpError } = await supabase.from('materia_prima').select('stock').eq('id', data.materia_prima_id).single();
-  if (mpError) throw mpError;
-  
-  const newStock = data.tipo === 'entrada' ? mp.stock + data.cantidad : mp.stock - data.cantidad;
-  
-  if (newStock < 0) {
-    throw new Error('El stock no puede ser negativo');
+  // Use the RPC function for atomic operations
+  const { error } = await supabase.rpc('registrar_movimiento_almacen', {
+    p_materia_prima_id: data.materia_prima_id,
+    p_almacen_id: data.almacen_id,
+    p_tipo: data.tipo,
+    p_cantidad: data.cantidad,
+    p_bundle_id: data.bundle_id || Math.random().toString(36).substring(7),
+    p_unidad_medida: data.unidad_medida,
+    p_comentario: data.comentario,
+    p_imagen_url: data.imagen_url
+  });
+
+  if (error) throw error;
+
+  // Fetch the newly created movement to return it (RPC doesn't return the record in this case)
+  const { data: newMov, error: fetchError } = await supabase
+    .from('movimientos')
+    .select('*')
+    .eq('materia_prima_id', data.materia_prima_id)
+    .eq('almacen_id', data.almacen_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (fetchError) throw fetchError;
+  return newMov;
+};
+
+export const realizarTransferencia = async (data: TransferenciaFormData): Promise<void> => {
+  if (!isSupabaseConfigured()) {
+    const bundle_id = Math.random().toString(36).substring(7);
+    for (const item of data.items) {
+      mockMovimientos.push({
+        id: Math.random().toString(36).substring(7),
+        bundle_id,
+        materia_prima_id: item.materia_prima_id,
+        almacen_id: data.almacen_origen_id,
+        tipo: 'salida',
+        cantidad: item.cantidad,
+        unidad_medida: item.unidad_medida,
+        fecha: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        comentario: data.comentario
+      });
+      mockMovimientos.push({
+        id: Math.random().toString(36).substring(7),
+        bundle_id,
+        materia_prima_id: item.materia_prima_id,
+        almacen_id: data.almacen_destino_id,
+        tipo: 'entrada',
+        cantidad: item.cantidad,
+        unidad_medida: item.unidad_medida,
+        fecha: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        comentario: data.comentario
+      });
+    }
+    return;
   }
 
-  // 2. Insert movement
-  const { data: newMov, error: movError } = await supabase.from('movimientos').insert([{ ...data, fecha: new Date().toISOString() }]).select().single();
-  if (movError) throw movError;
+  const bundle_id = Math.random().toString(36).substring(7);
+  for (const item of data.items) {
+    const { error } = await supabase.rpc('realizar_transferencia', {
+      p_materia_prima_id: item.materia_prima_id,
+      p_almacen_origen_id: data.almacen_origen_id,
+      p_almacen_destino_id: data.almacen_destino_id,
+      p_cantidad: item.cantidad,
+      p_bundle_id: bundle_id,
+      p_comentario: data.comentario
+    });
 
-  // 3. Update stock
-  const { error: updateError } = await supabase.from('materia_prima').update({ stock: newStock }).eq('id', data.materia_prima_id);
-  if (updateError) throw updateError;
-
-  return newMov;
+    if (error) throw error;
+  }
 };
 
 export const uploadEvidence = async (file: File): Promise<string> => {

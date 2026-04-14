@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Package, ArrowRightLeft, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, ArrowRightLeft, Menu, X, LogOut, Warehouse } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,6 +13,8 @@ export const Layout = () => {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Inventario', path: '/inventario', icon: Package },
     { name: 'Movimientos', path: '/movimientos', icon: ArrowRightLeft },
+    { name: 'Transferencias', path: '/transferencias', icon: ArrowRightLeft },
+    { name: 'Almacenes', path: '/almacenes', icon: Warehouse },
   ];
 
   const closeSidebar = () => setIsSidebarOpen(false);

@@ -11,6 +11,8 @@ import { Layout } from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Inventario from './pages/Inventario';
 import Movimientos from './pages/Movimientos';
+import Almacenes from './pages/Almacenes';
+import Transferencias from './pages/Transferencias';
 import LoginPage from './pages/LoginPage';
 
 import { useAppContext } from './context/AppContext';
@@ -46,6 +48,8 @@ export default function App() {
               <Route index element={<Dashboard />} />
               <Route path="inventario" element={<Inventario />} />
               <Route path="movimientos" element={<Movimientos />} />
+              <Route path="almacenes" element={<Almacenes />} />
+              <Route path="transferencias" element={<Transferencias />} />
             </Route>
           </Routes>
         </BrowserRouter>

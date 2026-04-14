@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Edit2, Trash2, X, Filter, FileText, Printer, Calendar } from 'lucide-react';
@@ -7,7 +7,7 @@ import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } fro
 import { cn } from '../lib/utils';
 
 export default function Inventario() {
-  const { materiasPrimas, movimientos, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
+  const { materiasPrimas, movimientos, almacenes, stockAlmacen, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
   const { isAdmin } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,6 +15,7 @@ export default function Inventario() {
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Advanced Filters
+  const [selectedAlmacenId, setSelectedAlmacenId] = useState<string>('');
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,14 +82,32 @@ export default function Inventario() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  // Initialize selectedAlmacenId when almacenes load
+  useEffect(() => {
+    if (almacenes.length > 0 && !selectedAlmacenId) {
+      setSelectedAlmacenId(almacenes[0].id);
+    }
+  }, [almacenes, selectedAlmacenId]);
+
   const inventoryReport = useMemo(() => {
     const start = startOfDay(parseISO(startDate));
     const end = endOfDay(parseISO(endDate));
 
     return materiasPrimas.map(mp => {
+      // Stock in selected warehouse or global sum
+      let currentStockInAlmacen = 0;
+      if (selectedAlmacenId === 'global') {
+        currentStockInAlmacen = stockAlmacen
+          .filter(s => s.materia_prima_id === mp.id)
+          .reduce((sum, s) => sum + s.stock, 0);
+      } else {
+        currentStockInAlmacen = stockAlmacen.find(s => s.materia_prima_id === mp.id && s.almacen_id === selectedAlmacenId)?.stock || 0;
+      }
+
       // Movements in range
       const movementsInRange = movimientos.filter(mov => 
         mov.materia_prima_id === mp.id && 
+        (selectedAlmacenId === 'global' || mov.almacen_id === selectedAlmacenId) &&
         isWithinInterval(parseISO(mov.fecha), { start, end })
       );
 
@@ -100,9 +119,10 @@ export default function Inventario() {
         .filter(m => m.tipo === 'salida')
         .reduce((sum, m) => sum + m.cantidad, 0);
 
-      // Movements AFTER end date (to calculate stock at end date)
+      // Movements AFTER end date
       const movementsAfterEnd = movimientos.filter(mov => 
         mov.materia_prima_id === mp.id && 
+        (selectedAlmacenId === 'global' || mov.almacen_id === selectedAlmacenId) &&
         parseISO(mov.fecha) > end
       );
 
@@ -115,13 +135,14 @@ export default function Inventario() {
         .reduce((sum, m) => sum + m.cantidad, 0);
 
       // Stock at End Date = CurrentStock - (Entradas after end) + (Salidas after end)
-      const stockAtEnd = mp.stock - entradasAfterEnd + salidasAfterEnd;
+      const stockAtEnd = currentStockInAlmacen - entradasAfterEnd + salidasAfterEnd;
       
       // Stock at Start Date = StockAtEnd - (Entradas in range) + (Salidas in range)
       const stockAtStart = stockAtEnd - entradasInRange + salidasInRange;
 
       return {
         ...mp,
+        stock: currentStockInAlmacen,
         stockAtStart,
         entradasInRange,
         salidasInRange,
@@ -144,7 +165,17 @@ export default function Inventario() {
   }, [materiasPrimas, movimientos, startDate, endDate, searchTerm, filterStatus, filterUnidad]);
 
   const filteredMateriasPrimas = useMemo(() => {
-    return materiasPrimas.filter(mp => {
+    return materiasPrimas.map(mp => {
+      let stock = 0;
+      if (selectedAlmacenId === 'global') {
+        stock = stockAlmacen
+          .filter(s => s.materia_prima_id === mp.id)
+          .reduce((sum, s) => sum + s.stock, 0);
+      } else {
+        stock = stockAlmacen.find(s => s.materia_prima_id === mp.id && s.almacen_id === selectedAlmacenId)?.stock || 0;
+      }
+      return { ...mp, stock };
+    }).filter(mp => {
       const matchesSearch = mp.nombre.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesUnidad = filterUnidad === 'todos' || mp.unidad_medida === filterUnidad;
       
@@ -158,7 +189,7 @@ export default function Inventario() {
 
       return matchesSearch && matchesUnidad && matchesStatus;
     });
-  }, [materiasPrimas, searchTerm, filterStatus, filterUnidad]);
+  }, [materiasPrimas, stockAlmacen, selectedAlmacenId, searchTerm, filterStatus, filterUnidad]);
 
   const paginatedMateriasPrimas = useMemo(() => {
     const data = isReportMode ? inventoryReport : filteredMateriasPrimas;
@@ -265,6 +296,23 @@ export default function Inventario() {
 
       {/* Advanced Filters */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle flex flex-wrap gap-6 items-end print:hidden">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Almacén</label>
+          <select
+            value={selectedAlmacenId}
+            onChange={(e) => {
+              setSelectedAlmacenId(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="global">Global</option>
+            {almacenes.map(alm => (
+              <option key={alm.id} value={alm.id}>{alm.nombre}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Buscar Producto</label>
           <input
@@ -354,6 +402,7 @@ export default function Inventario() {
       {/* Report Header (Print Only) */}
       <div className="hidden print:block text-center mb-8">
         <h1 className="text-3xl font-bold text-black mb-2">CCM Almacén - Reporte de Inventario</h1>
+        <p className="text-lg font-medium text-gray-700">Almacén: {selectedAlmacenId === 'global' ? 'Todos los Almacenes (Global)' : almacenes.find(a => a.id === selectedAlmacenId)?.nombre}</p>
         <p className="text-gray-600">Periodo: {format(parseISO(startDate), 'dd/MM/yyyy')} al {format(parseISO(endDate), 'dd/MM/yyyy')}</p>
         <p className="text-xs text-gray-400 mt-2">Generado el: {format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
       </div>

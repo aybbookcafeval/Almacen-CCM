@@ -7,17 +7,19 @@ import { CameraCapture } from '../components/CameraCapture';
 import { cn } from '../lib/utils';
 
 export default function Movimientos() {
-  const { movimientos, materiasPrimas, addMovimiento } = useAppContext();
+  const { movimientos, materiasPrimas, almacenes, stockAlmacen, addMovimiento } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterProducto, setFilterProducto] = useState<string>('todos');
+  const [filterAlmacen, setFilterAlmacen] = useState<string>('todos');
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   
-  const [formData, setFormData] = useState<MovimientoBundleFormData>({
+  const [formData, setFormData] = useState<MovimientoBundleFormData & { almacen_id: string }>({
     tipo: 'entrada',
+    almacen_id: '',
     items: [{
       materia_prima_id: '',
       cantidad: 0,
@@ -26,25 +28,37 @@ export default function Movimientos() {
     comentario: ''
   });
   const [file, setFile] = useState<File | null>(null);
+  const [selectedBundle, setSelectedBundle] = useState<Movimiento[] | null>(null);
 
   const filteredMovimientos = useMemo(() => {
     const start = startOfDay(parseISO(startDate));
     const end = endOfDay(parseISO(endDate));
 
     return movimientos.filter(mov => {
-      if (filterTipo !== 'todos' && mov.tipo !== filterTipo) return false;
+      if (filterTipo !== 'todos') {
+        if (filterTipo === 'transferencia') {
+          // Check if it's part of a transfer bundle
+          const bundle = movimientos.filter(m => m.bundle_id === mov.bundle_id);
+          const isTransfer = bundle.length === 2 && bundle.some(m => m.tipo === 'entrada') && bundle.some(m => m.tipo === 'salida');
+          if (!isTransfer) return false;
+        } else if (mov.tipo !== filterTipo) {
+          return false;
+        }
+      }
       if (filterProducto !== 'todos' && mov.materia_prima_id !== filterProducto) return false;
+      if (filterAlmacen !== 'todos' && mov.almacen_id !== filterAlmacen) return false;
       
       const movDate = parseISO(mov.fecha);
       if (!isWithinInterval(movDate, { start, end })) return false;
       
       return true;
     });
-  }, [movimientos, filterTipo, filterProducto, startDate, endDate]);
+  }, [movimientos, filterTipo, filterProducto, filterAlmacen, startDate, endDate]);
 
   const handleOpenModal = () => {
     setFormData({
       tipo: 'entrada',
+      almacen_id: almacenes.length > 0 ? almacenes[0].id : '',
       items: [{
         materia_prima_id: materiasPrimas.length > 0 ? materiasPrimas[0].id : '',
         cantidad: 0,
@@ -87,6 +101,10 @@ export default function Movimientos() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.almacen_id) {
+      alert('Debe seleccionar un almacén');
+      return;
+    }
     if (formData.items.some(d => !d.materia_prima_id || d.cantidad <= 0)) {
       alert('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
       return;
@@ -104,8 +122,6 @@ export default function Movimientos() {
     }
   };
 
-  const [selectedBundle, setSelectedBundle] = useState<Movimiento[] | null>(null);
-  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -133,12 +149,13 @@ export default function Movimientos() {
   };
 
   const handleExportCSV = () => {
-    const headers = ['Fecha', 'Tipo', 'Productos'];
+    const headers = ['Fecha', 'Almacén', 'Tipo', 'Productos'];
     const csvContent = [
       headers.join(','),
       ...groupedMovimientos.map((group) => {
         const firstMov = group[0];
         const date = format(new Date(firstMov.fecha), 'yyyy-MM-dd HH:mm');
+        const almacen = almacenes.find(a => a.id === firstMov.almacen_id)?.nombre || 'Desconocido';
         const tipo = firstMov.tipo;
         const products = group.map(mov => {
           const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
@@ -147,6 +164,7 @@ export default function Movimientos() {
         
         return [
           date,
+          `"${almacen}"`,
           tipo,
           `"${products}"`
         ].join(',');
@@ -196,6 +214,22 @@ export default function Movimientos() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-primary-subtle grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-4 items-end print:hidden">
         <div className="w-full lg:w-40">
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Almacén</label>
+          <select
+            value={filterAlmacen}
+            onChange={(e) => {
+              setFilterAlmacen(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="todos">Todos</option>
+            {almacenes.map(alm => (
+              <option key={alm.id} value={alm.id}>{alm.nombre}</option>
+            ))}
+          </select>
+        </div>
+        <div className="w-full lg:w-40">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Tipo</label>
           <select
             value={filterTipo}
@@ -208,6 +242,7 @@ export default function Movimientos() {
             <option value="todos">Todos</option>
             <option value="entrada">Entradas</option>
             <option value="salida">Salidas</option>
+            <option value="transferencia">Transferencias</option>
           </select>
         </div>
         <div className="w-full lg:w-64">
@@ -263,6 +298,7 @@ export default function Movimientos() {
         <h1 className="text-3xl font-bold text-black mb-2">CCM Almacén - Historial de Movimientos</h1>
         <p className="text-gray-600">Periodo: {format(parseISO(startDate), 'dd/MM/yyyy')} al {format(parseISO(endDate), 'dd/MM/yyyy')}</p>
         <div className="mt-2 flex justify-center gap-4 text-sm text-gray-500">
+          <span>Almacén: {filterAlmacen === 'todos' ? 'Todos' : almacenes.find(a => a.id === filterAlmacen)?.nombre}</span>
           <span>Tipo: {filterTipo === 'todos' ? 'Todos' : filterTipo === 'entrada' ? 'Entradas' : 'Salidas'}</span>
           <span>Producto: {filterProducto === 'todos' ? 'Todos' : materiasPrimas.find(m => m.id === filterProducto)?.nombre}</span>
         </div>
@@ -275,6 +311,7 @@ export default function Movimientos() {
             <thead className="table-header">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Almacén</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tipo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Productos</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider print:hidden">Evidencia</th>
@@ -282,26 +319,43 @@ export default function Movimientos() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedMovimientos.map((group) => {
+                const isTransfer = group.length === 2 && group.some(m => m.tipo === 'entrada') && group.some(m => m.tipo === 'salida');
+                const salida = group.find(m => m.tipo === 'salida');
+                const entrada = group.find(m => m.tipo === 'entrada');
                 const firstMov = group[0];
                 const isEntrada = firstMov.tipo === 'entrada';
+                
+                const almacenOrigen = almacenes.find(a => a.id === salida?.almacen_id)?.nombre || 'Desconocido';
+                const almacenDestino = almacenes.find(a => a.id === entrada?.almacen_id)?.nombre || 'Desconocido';
+
                 return (
                   <tr key={firstMov.bundle_id} onClick={() => setSelectedBundle(group)} className="hover:bg-gray-50 cursor-pointer print:break-inside-avoid">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {format(new Date(firstMov.fecha), 'dd/MM/yyyy HH:mm')}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {isTransfer ? `${almacenOrigen} ➔ ${almacenDestino}` : (almacenes.find(a => a.id === firstMov.almacen_id)?.nombre || 'Desconocido')}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        isEntrada ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        isTransfer ? 'bg-purple-100 text-purple-800' : isEntrada ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
-                        {isEntrada ? <ArrowDownToLine size={14} className="mr-1" /> : <ArrowUpFromLine size={14} className="mr-1" />}
-                        {isEntrada ? 'Entrada' : 'Salida'}
+                        {isTransfer ? 'TRANSFERENCIA' : isEntrada ? 'Entrada' : 'Salida'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {group.map(mov => {
-                        const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
-                        return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
-                      })}
+                      {isTransfer ? (
+                        (() => {
+                          const mov = group[0];
+                          const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                          return <div>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                        })()
+                      ) : (
+                        group.map(mov => {
+                          const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                          return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                        })
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 print:hidden">
                       {firstMov.imagen_url ? (
@@ -358,16 +412,49 @@ export default function Movimientos() {
             </div>
             <div className="space-y-4">
               <p className="text-sm text-gray-600">Fecha: {format(new Date(selectedBundle[0].fecha), 'dd/MM/yyyy HH:mm')}</p>
-              <p className="text-sm text-gray-600">Tipo: {selectedBundle[0].tipo === 'entrada' ? 'Entrada' : 'Salida'}</p>
+              {(() => {
+                const isTransfer = selectedBundle.length === 2 && selectedBundle.some(m => m.tipo === 'entrada') && selectedBundle.some(m => m.tipo === 'salida');
+                const salida = selectedBundle.find(m => m.tipo === 'salida');
+                const entrada = selectedBundle.find(m => m.tipo === 'entrada');
+                const almacenOrigen = almacenes.find(a => a.id === salida?.almacen_id)?.nombre || 'Desconocido';
+                const almacenDestino = almacenes.find(a => a.id === entrada?.almacen_id)?.nombre || 'Desconocido';
+
+                if (isTransfer) {
+                  return (
+                    <>
+                      <p className="text-sm text-gray-600">Almacén Origen: {almacenOrigen}</p>
+                      <p className="text-sm text-gray-600">Almacén Destino: {almacenDestino}</p>
+                      <p className="text-sm text-gray-600">Tipo: Transferencia</p>
+                    </>
+                  );
+                } else {
+                  return (
+                    <>
+                      <p className="text-sm text-gray-600">Almacén: {almacenes.find(a => a.id === selectedBundle[0].almacen_id)?.nombre || 'Desconocido'}</p>
+                      <p className="text-sm text-gray-600">Tipo: {selectedBundle[0].tipo === 'entrada' ? 'Entrada' : 'Salida'}</p>
+                    </>
+                  );
+                }
+              })()}
               {selectedBundle[0].comentario && (
                 <p className="text-sm text-gray-600"><span className="font-medium">Comentario:</span> {selectedBundle[0].comentario}</p>
               )}
               <div className="border-t pt-4">
                 <h4 className="font-medium text-gray-900 mb-2">Productos:</h4>
-                {selectedBundle.map(mov => {
-                  const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
-                  return <div key={mov.id} className="text-sm text-gray-700">{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
-                })}
+                {(() => {
+                  const grouped = selectedBundle.reduce<{ [key: string]: Movimiento }>((acc, mov: Movimiento) => {
+                    if (!acc[mov.materia_prima_id]) {
+                      acc[mov.materia_prima_id] = { ...mov, cantidad: 0 };
+                    }
+                    acc[mov.materia_prima_id].cantidad += mov.cantidad;
+                    return acc;
+                  }, {});
+                  
+                  return Object.values(grouped).map((mov: Movimiento) => {
+                    const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                    return <div key={mov.materia_prima_id} className="text-sm text-gray-700">{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                  });
+                })()}
               </div>
               {selectedBundle[0].imagen_url && (
                 <div className="border-t pt-4">
@@ -394,6 +481,21 @@ export default function Movimientos() {
             
             <div className="flex-1 overflow-y-auto p-6">
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Almacén</label>
+                  <select
+                    required
+                    value={formData.almacen_id}
+                    onChange={(e) => setFormData({ ...formData, almacen_id: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
+                  >
+                    <option value="" disabled>Seleccione un almacén</option>
+                    {almacenes.map(alm => (
+                      <option key={alm.id} value={alm.id}>{alm.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Tipo de Movimiento</label>
                   <div className="mt-2 flex space-x-4">
@@ -433,17 +535,20 @@ export default function Movimientos() {
                       )}
                       
                       <div>
-                        <select
-                          required
-                          value={item.materia_prima_id}
-                          onChange={(e) => handleMateriaPrimaChange(index, e.target.value)}
-                          className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
-                        >
-                          <option value="" disabled>Seleccione un producto</option>
-                          {materiasPrimas.map(mp => (
-                            <option key={mp.id} value={mp.id}>{mp.nombre} (Stock: {mp.stock} {mp.unidad_medida})</option>
-                          ))}
-                        </select>
+                          <select
+                            required
+                            value={item.materia_prima_id}
+                            onChange={(e) => handleMateriaPrimaChange(index, e.target.value)}
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
+                          >
+                            <option value="" disabled>Seleccione un producto</option>
+                            {materiasPrimas.map(mp => {
+                              const stockInAlmacen = stockAlmacen.find(s => s.materia_prima_id === mp.id && s.almacen_id === formData.almacen_id)?.stock || 0;
+                              return (
+                                <option key={mp.id} value={mp.id}>{mp.nombre} (Stock: {stockInAlmacen} {mp.unidad_medida})</option>
+                              );
+                            })}
+                          </select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
