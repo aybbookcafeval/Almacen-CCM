@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
 import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera, Calendar, Printer, FileText } from 'lucide-react';
 import { Movimiento, MovimientoBundleFormData } from '../types';
@@ -102,21 +103,22 @@ export default function Movimientos() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.almacen_id) {
-      alert('Debe seleccionar un almacén');
+      toast.error('Debe seleccionar un almacén');
       return;
     }
     if (formData.items.some(d => !d.materia_prima_id || d.cantidad <= 0)) {
-      alert('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
+      toast.error('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
       return;
     }
 
     try {
       setIsSubmitting(true);
       await addMovimiento(formData, file || undefined);
+      toast.success('Movimiento registrado correctamente');
       setIsModalOpen(false);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || 'Error al registrar movimiento');
+      toast.error(error.message || 'Error al registrar movimiento');
     } finally {
       setIsSubmitting(false);
     }
@@ -351,10 +353,13 @@ export default function Movimientos() {
                           return <div>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
                         })()
                       ) : (
-                        group.map(mov => {
-                          const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
-                          return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
-                        })
+                        <>
+                          {group.slice(0, 10).map(mov => {
+                            const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                            return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                          })}
+                          {group.length > 10 && <div>...</div>}
+                        </>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 print:hidden">
@@ -403,14 +408,14 @@ export default function Movimientos() {
       {/* Bundle Details Modal */}
       {selectedBundle && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b">
               <h3 className="text-lg font-medium text-gray-900">Detalle del Movimiento</h3>
               <button onClick={() => setSelectedBundle(null)} className="text-gray-400 hover:text-gray-500">
                 <X size={24} />
               </button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-4 p-6 overflow-y-auto flex-1">
               <p className="text-sm text-gray-600">Fecha: {format(new Date(selectedBundle[0].fecha), 'dd/MM/yyyy HH:mm')}</p>
               {(() => {
                 const isTransfer = selectedBundle.length === 2 && selectedBundle.some(m => m.tipo === 'entrada') && selectedBundle.some(m => m.tipo === 'salida');

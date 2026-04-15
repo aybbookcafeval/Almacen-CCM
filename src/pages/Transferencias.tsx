@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
-import { ArrowRightLeft, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { ArrowRightLeft, AlertCircle, X } from 'lucide-react';
 import { TransferenciaFormData } from '../types';
 
 export default function Transferencias() {
   const { materiasPrimas, almacenes, stockAlmacen, transferirStock } = useAppContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
   
   const [formData, setFormData] = useState<TransferenciaFormData>({
     almacen_origen_id: '',
@@ -57,26 +57,26 @@ export default function Transferencias() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.almacen_origen_id || !formData.almacen_destino_id) {
-      alert('Por favor complete todos los campos obligatorios');
+      toast.error('Por favor complete todos los campos obligatorios');
       return;
     }
     if (formData.almacen_origen_id === formData.almacen_destino_id) {
-      alert('El almacén de origen y destino no pueden ser el mismo');
+      toast.error('El almacén de origen y destino no pueden ser el mismo');
       return;
     }
     if (formData.items.some(item => !item.materia_prima_id || item.cantidad <= 0)) {
-      alert('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
+      toast.error('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
       return;
     }
     if (formData.items.some(item => item.cantidad > getAvailableStock(item.materia_prima_id, formData.almacen_origen_id))) {
-      alert('No hay suficiente stock en el almacén de origen para uno o más productos');
+      toast.error('No hay suficiente stock en el almacén de origen para uno o más productos');
       return;
     }
 
     try {
       setIsSubmitting(true);
       await transferirStock(formData);
-      setSuccess(true);
+      toast.success('Transferencia realizada con éxito');
       setFormData({
         almacen_origen_id: '',
         almacen_destino_id: '',
@@ -87,9 +87,8 @@ export default function Transferencias() {
         }],
         comentario: ''
       });
-      setTimeout(() => setSuccess(false), 5000);
     } catch (error: any) {
-      alert(error.message || 'Error al realizar la transferencia');
+      toast.error(error.message || 'Error al realizar la transferencia');
     } finally {
       setIsSubmitting(false);
     }
@@ -105,13 +104,6 @@ export default function Transferencias() {
       </div>
 
       <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-primary-subtle">
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center text-green-700">
-            <CheckCircle2 size={20} className="mr-2" />
-            Transferencia realizada con éxito
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
