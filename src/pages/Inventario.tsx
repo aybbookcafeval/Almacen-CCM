@@ -192,12 +192,11 @@ export default function Inventario() {
   }, [materiasPrimas, stockAlmacen, selectedAlmacenId, searchTerm, filterStatus, filterUnidad]);
 
   const paginatedMateriasPrimas = useMemo(() => {
-    const data = isReportMode ? inventoryReport : filteredMateriasPrimas;
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return data.slice(startIndex, startIndex + itemsPerPage);
-  }, [isReportMode, inventoryReport, filteredMateriasPrimas, currentPage]);
+    return filteredMateriasPrimas.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredMateriasPrimas, currentPage]);
 
-  const totalPages = Math.ceil((isReportMode ? inventoryReport.length : filteredMateriasPrimas.length) / itemsPerPage);
+  const totalPages = Math.ceil(filteredMateriasPrimas.length / itemsPerPage);
 
   const handlePrint = () => {
     window.focus();
@@ -250,21 +249,13 @@ export default function Inventario() {
         <h2 className="text-2xl font-bold text-gray-900">Inventario de Materia Prima</h2>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              setIsReportMode(!isReportMode);
-              setCurrentPage(1);
-            }}
-            className={cn(
-              "flex items-center px-4 py-2 rounded-md transition-colors border",
-              isReportMode 
-                ? "bg-black text-white border-black" 
-                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-            )}
+            onClick={handlePrint}
+            className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
           >
-            <FileText size={20} className="mr-2" />
-            {isReportMode ? 'Vista Normal' : 'Modo Reporte'}
+            <Printer size={20} className="mr-2" />
+            Imprimir Inventario
           </button>
-          {!isReportMode && isAdmin && (
+          {isAdmin && (
             <button
               onClick={() => handleOpenModal()}
               className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
@@ -272,24 +263,6 @@ export default function Inventario() {
               <Plus size={20} className="mr-2" />
               Nuevo Producto
             </button>
-          )}
-          {isReportMode && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                <FileText size={20} className="mr-2" />
-                Exportar CSV
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
-              >
-                <Printer size={20} className="mr-2" />
-                Imprimir Reporte
-              </button>
-            </div>
           )}
         </div>
       </div>
@@ -363,40 +336,6 @@ export default function Inventario() {
           </select>
         </div>
         
-        {isReportMode && (
-          <>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Desde</label>
-              <div className="relative">
-                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Hasta</label>
-              <div className="relative">
-                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-1.5 text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
-                />
-              </div>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Report Header (Print Only) */}
