@@ -5,6 +5,7 @@ import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera, 
 import { Movimiento, MovimientoBundleFormData } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } from 'date-fns';
 import { CameraCapture } from '../components/CameraCapture';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { cn } from '../lib/utils';
 
 export default function Movimientos() {
@@ -554,20 +555,19 @@ export default function Movimientos() {
                       )}
                       
                       <div>
-                          <select
-                            required
-                            value={item.materia_prima_id}
-                            onChange={(e) => handleMateriaPrimaChange(index, e.target.value)}
-                            className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
-                          >
-                            <option value="" disabled>Seleccione un producto</option>
-                            {materiasPrimas.map(mp => {
+                          <SearchableSelect
+                            options={materiasPrimas.map(mp => {
                               const stockInAlmacen = stockAlmacen.find(s => s.materia_prima_id === mp.id && s.almacen_id === formData.almacen_id)?.stock || 0;
-                              return (
-                                <option key={mp.id} value={mp.id}>{mp.nombre} (Stock: {stockInAlmacen} {mp.unidad_medida})</option>
-                              );
+                              return {
+                                id: mp.id,
+                                label: mp.nombre,
+                                subLabel: `Stock: ${stockInAlmacen} ${mp.unidad_medida}`
+                              };
                             })}
-                          </select>
+                            value={item.materia_prima_id}
+                            onChange={(val) => handleMateriaPrimaChange(index, val)}
+                            placeholder="Seleccione un producto"
+                          />
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
