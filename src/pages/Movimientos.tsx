@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 export default function Movimientos() {
   const { movimientos, materiasPrimas, almacenes, stockAlmacen, addMovimiento } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [filterTipo, setFilterTipo] = useState<string>('todos');
@@ -116,11 +117,16 @@ export default function Movimientos() {
       toast.error('Todos los productos deben tener un producto seleccionado y una cantidad mayor a 0');
       return;
     }
+    
+    setIsConfirmModalOpen(true);
+  };
 
+  const confirmSubmit = async () => {
     try {
       setIsSubmitting(true);
       await addMovimiento(formData, file || undefined);
       toast.success('Movimiento registrado correctamente');
+      setIsConfirmModalOpen(false);
       setIsModalOpen(false);
     } catch (error: any) {
       console.error(error);
@@ -480,6 +486,49 @@ export default function Movimientos() {
 
 
       {/* Modal */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Confirmar Movimiento</h3>
+            <p className="text-sm text-gray-600">
+              ¿Estás seguro de registrar este movimiento de <strong>{formData.tipo}</strong> en el almacén <strong>{almacenes.find(a => a.id === formData.almacen_id)?.nombre}</strong>?
+            </p>
+            <div className="text-sm text-gray-700">
+              <p>Productos:</p>
+              <ul className="list-disc list-inside">
+                {formData.items.map((item, index) => {
+                  const mp = materiasPrimas.find(m => m.id === item.materia_prima_id);
+                  return <li key={index}>{mp?.nombre}: {item.cantidad} {item.unidad_medida}</li>;
+                })}
+              </ul>
+            </div>
+            <div className="flex justify-end space-x-3 pt-4">
+              <button 
+                onClick={() => setIsConfirmModalOpen(false)}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmSubmit}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 disabled:opacity-50 flex items-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Procesando...
+                  </>
+                ) : (
+                  'Confirmar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
