@@ -8,7 +8,7 @@ import { cn } from '../lib/utils';
 
 export default function Inventario() {
   const { materiasPrimas, movimientos, almacenes, stockAlmacen, addMateriaPrima, editMateriaPrima, removeMateriaPrima } = useAppContext();
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReportMode, setIsReportMode] = useState(false);
@@ -255,7 +255,7 @@ export default function Inventario() {
             <Printer size={20} className="mr-2" />
             Imprimir Inventario
           </button>
-          {isAdmin && (
+          {(isAdmin || profile?.role === 'user') && (
             <button
               onClick={() => handleOpenModal()}
               className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
@@ -366,7 +366,7 @@ export default function Inventario() {
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Unidad</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Mín / Máx</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Estado</th>
-                  {isAdmin && <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider print:hidden">Acciones</th>}
+                  {(isAdmin || profile?.role === 'user') && <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider print:hidden">Acciones</th>}
                 </tr>
               )}
             </thead>
@@ -402,7 +402,7 @@ export default function Inventario() {
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Óptimo</span>
                       )}
                     </td>
-                    {isAdmin && (
+                    {(isAdmin || profile?.role === 'user') && (
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium print:hidden">
                         <button onClick={() => handleOpenModal(mp)} className="text-blue-600 hover:text-blue-900 mr-4">
                           <Edit2 size={18} />
