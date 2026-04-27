@@ -40,7 +40,7 @@ export const createMateriaPrima = async (data: MateriaPrimaFormData): Promise<Ma
     mockMateriasPrimas.push(newMp);
     return newMp;
   }
-  const { data: newMp, error } = await supabase.from('materia_prima').insert([{ ...data, stock: 0 }]).select().single();
+  const { data: newMp, error } = await supabase.from('materia_prima').insert([{ ...data }]).select().single();
   if (error) throw error;
   return newMp;
 };
