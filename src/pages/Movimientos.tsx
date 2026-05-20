@@ -40,9 +40,10 @@ export default function Movimientos() {
     return movimientos.filter(mov => {
       if (filterTipo !== 'todos') {
         if (filterTipo === 'transferencia') {
-          // Check if it's part of a transfer bundle
           const bundle = movimientos.filter(m => m.bundle_id === mov.bundle_id);
-          const isTransfer = bundle.length === 2 && bundle.some(m => m.tipo === 'entrada') && bundle.some(m => m.tipo === 'salida');
+          const hasEntrada = bundle.some(m => m.tipo === 'entrada');
+          const hasSalida = bundle.some(m => m.tipo === 'salida');
+          const isTransfer = hasEntrada && hasSalida;
           if (!isTransfer) return false;
         } else if (mov.tipo !== filterTipo) {
           return false;
@@ -333,7 +334,10 @@ export default function Movimientos() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedMovimientos.map((group) => {
-                const isTransfer = group.length === 2 && group.some(m => m.tipo === 'entrada') && group.some(m => m.tipo === 'salida');
+                const hasEntrada = group.some(m => m.tipo === 'entrada');
+                const hasSalida = group.some(m => m.tipo === 'salida');
+                const isTransfer = hasEntrada && hasSalida;
+                
                 const salida = group.find(m => m.tipo === 'salida');
                 const entrada = group.find(m => m.tipo === 'entrada');
                 const firstMov = group[0];
@@ -359,11 +363,13 @@ export default function Movimientos() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {isTransfer ? (
-                        (() => {
-                          const mov = group[0];
-                          const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
-                          return <div>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
-                        })()
+                        <>
+                          {/* For transfers, show one entry per product in the bundle */}
+                          {group.filter(m => m.tipo === 'entrada').map(mov => {
+                            const mp = materiasPrimas.find(m => m.id === mov.materia_prima_id);
+                            return <div key={mov.id}>{mp?.nombre || 'Desconocido'}: {mov.cantidad} {mov.unidad_medida}</div>
+                          })}
+                        </>
                       ) : (
                         <>
                           {group.slice(0, 10).map(mov => {
@@ -430,7 +436,9 @@ export default function Movimientos() {
             <div className="space-y-4 p-6 overflow-y-auto flex-1">
               <p className="text-sm text-gray-600">Fecha: {format(new Date(selectedBundle[0].fecha), 'dd/MM/yyyy HH:mm')}</p>
               {(() => {
-                const isTransfer = selectedBundle.length === 2 && selectedBundle.some(m => m.tipo === 'entrada') && selectedBundle.some(m => m.tipo === 'salida');
+                const hasEntrada = selectedBundle.some(m => m.tipo === 'entrada');
+                const hasSalida = selectedBundle.some(m => m.tipo === 'salida');
+                const isTransfer = hasEntrada && hasSalida;
                 const salida = selectedBundle.find(m => m.tipo === 'salida');
                 const entrada = selectedBundle.find(m => m.tipo === 'entrada');
                 const almacenOrigen = almacenes.find(a => a.id === salida?.almacen_id)?.nombre || 'Desconocido';
@@ -459,7 +467,12 @@ export default function Movimientos() {
               <div className="border-t pt-4">
                 <h4 className="font-medium text-gray-900 mb-2">Productos:</h4>
                 {(() => {
-                  const grouped = selectedBundle.reduce<{ [key: string]: Movimiento }>((acc, mov: Movimiento) => {
+                  const hasEntrada = selectedBundle.some(m => m.tipo === 'entrada');
+                  const hasSalida = selectedBundle.some(m => m.tipo === 'salida');
+                  const isTransfer = hasEntrada && hasSalida;
+                  const movementsToSum = isTransfer ? selectedBundle.filter(m => m.tipo === 'entrada') : selectedBundle;
+                  
+                  const grouped = movementsToSum.reduce<{ [key: string]: Movimiento }>((acc, mov: Movimiento) => {
                     if (!acc[mov.materia_prima_id]) {
                       acc[mov.materia_prima_id] = { ...mov, cantidad: 0 };
                     }

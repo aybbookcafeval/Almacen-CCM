@@ -76,7 +76,15 @@ drop policy if exists "Admins can manage materia_prima" on materia_prima;
 create policy "Admins can view all profiles" on profiles for select using (public.is_admin());
 
 -- Policies for materia_prima
-create policy "Admins can manage materia_prima" on materia_prima for all using (public.is_admin());
+drop policy if exists "Admins can manage materia_prima" on materia_prima;
+drop policy if exists "Authenticated users can read materia_prima" on materia_prima;
+drop policy if exists "Authenticated users can insert materia_prima" on materia_prima;
+drop policy if exists "Authenticated users can update materia_prima" on materia_prima;
+
+create policy "Authenticated users can read materia_prima" on materia_prima for select using (auth.role() = 'authenticated');
+create policy "Authenticated users can insert materia_prima" on materia_prima for insert with check (auth.role() = 'authenticated');
+create policy "Authenticated users can update materia_prima" on materia_prima for update using (auth.role() = 'authenticated');
+create policy "Admins can delete materia_prima" on materia_prima for delete using (public.is_admin());
 
 -- Policies for movimientos
 create policy "Authenticated users can read movimientos" on movimientos for select using (auth.role() = 'authenticated');
