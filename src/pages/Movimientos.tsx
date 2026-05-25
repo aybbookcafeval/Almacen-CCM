@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Plus, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, Camera, Calendar, Printer, FileText } from 'lucide-react';
 import { Movimiento, MovimientoBundleFormData } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } from 'date-fns';
@@ -10,6 +11,7 @@ import { cn } from '../lib/utils';
 
 export default function Movimientos() {
   const { movimientos, materiasPrimas, almacenes, stockAlmacen, addMovimiento } = useAppContext();
+  const { isAdmin } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,9 +111,10 @@ export default function Movimientos() {
       toast.error('Debe seleccionar un almacén');
       return;
     }
-    const isPrincipalLaVela = almacenes.find(a => a.id === formData.almacen_id)?.nombre === 'Principal La Vela';
-    if (isPrincipalLaVela && formData.tipo === 'salida') {
-      toast.error('No se pueden registrar salidas en el almacén Principal La Vela');
+    const almacen = almacenes.find(a => a.id === formData.almacen_id);
+    const isRestrictedWarehouse = almacen?.nombre === 'Principal La Vela' || almacen?.nombre === 'CCM Almacen';
+    if (!isAdmin && isRestrictedWarehouse && formData.tipo === 'salida') {
+      toast.error(`No se pueden registrar salidas manuales en el almacén ${almacen?.nombre} con rol usuario. Contacte al administrador.`);
       return;
     }
     if (formData.items.some(d => !d.materia_prima_id || d.cantidad <= 0)) {
@@ -561,11 +564,12 @@ export default function Movimientos() {
                     value={formData.almacen_id}
                     onChange={(e) => {
                       const newAlmacenId = e.target.value;
-                      const isNewPrincipal = almacenes.find(a => a.id === newAlmacenId)?.nombre === 'Principal La Vela';
+                      const newAlmacenNombre = almacenes.find(a => a.id === newAlmacenId)?.nombre;
+                      const isNowRestricted = !isAdmin && (newAlmacenNombre === 'Principal La Vela' || newAlmacenNombre === 'CCM Almacen' || newAlmacenNombre === 'CCM Almacén');
                       setFormData({
                         ...formData,
                         almacen_id: newAlmacenId,
-                        tipo: isNewPrincipal ? 'entrada' : formData.tipo
+                        tipo: isNowRestricted ? 'entrada' : formData.tipo
                       });
                     }}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black sm:text-sm"
@@ -592,16 +596,24 @@ export default function Movimientos() {
                       <span className="ml-2 text-sm text-gray-700">Entrada</span>
                     </label>
                     <label className="inline-flex items-center">
-                      <input
-                        type="radio"
-                        className="form-radio text-black"
-                        name="tipo"
-                        value="salida"
-                        disabled={almacenes.find(a => a.id === formData.almacen_id)?.nombre === 'Principal La Vela'}
-                        checked={formData.tipo === 'salida'}
-                        onChange={() => setFormData({ ...formData, tipo: 'salida' })}
-                      />
-                      <span className={cn("ml-2 text-sm", almacenes.find(a => a.id === formData.almacen_id)?.nombre === 'Principal La Vela' ? "text-gray-400" : "text-gray-700")}>Salida</span>
+                      {(() => {
+                        const currentAlmNombre = almacenes.find(a => a.id === formData.almacen_id)?.nombre;
+                        const isNowRestricted = !isAdmin && (currentAlmNombre === 'Principal La Vela' || currentAlmNombre === 'CCM Almacen' || currentAlmNombre === 'CCM Almacén');
+                        return (
+                          <>
+                            <input
+                              type="radio"
+                              className="form-radio text-black"
+                              name="tipo"
+                              value="salida"
+                              disabled={isNowRestricted}
+                              checked={formData.tipo === 'salida'}
+                              onChange={() => setFormData({ ...formData, tipo: 'salida' })}
+                            />
+                            <span className={cn("ml-2 text-sm", isNowRestricted ? "text-gray-400" : "text-gray-700")}>Salida</span>
+                          </>
+                        );
+                      })()}
                     </label>
                   </div>
                 </div>
